@@ -1,0 +1,17 @@
+{
+  "name": "vaccine-alert",
+  "version": "1.0.0",
+  "description": "Checks for vaccine availability every minute and alerts if new slots are available for the given condition.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Prajwal V Bharadwaj",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^0.21.1",
+    "google-tts-api": "^2.0.2",
+    "minimist": "^1.2.5",
+    "play-sound": "^1.1.3"
+  }
+}

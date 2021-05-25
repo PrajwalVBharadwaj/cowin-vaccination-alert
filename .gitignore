@@ -104,4 +104,4 @@ dist
 .tern-port
 
 # Output slots log JSON
-.slotsData
+slotsData

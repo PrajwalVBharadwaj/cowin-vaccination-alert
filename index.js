@@ -3,19 +3,18 @@ const fs = require("fs");
 const googleTTS = require("google-tts-api");
 const player = require("play-sound")({ player: "mplayer" });
 
-const URL =
-    "https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByPin?pincode=560011&date=24-05-2021&vaccine=COVAXIN";
+const API_HIT_INTERVAL = 60000;
 
-const syncPlay = () => {
+const syncPlay = (soundUrlArr, i, startTime) => {
+    let elapsedTime = new Date() - startTime;
     let childProcess = player.play(`${soundUrlArr[i]}.mp3`, (err) => {
         if (err) {
             console.log(err);
         }
     });
     childProcess.on("close", () => {
-        if (i < soundUrlArr.length) {
-            i++;
-            syncPlay();
+        if (i < soundUrlArr.length && elapsedTime < API_HIT_INTERVAL - 1000) {
+            syncPlay(soundUrlArr, i + 1, startTime);
         } else {
             return false;
         }
@@ -34,20 +33,53 @@ const getSoundUrl = (text) => {
     return soundUrl;
 };
 
+const getFormattedDate = () => {
+    let date = new Date();
+    let dateStr = `${date.getDate()}-${
+        date.getMonth() + 1
+    }-${date.getFullYear()}`;
+    return dateStr;
+};
+
+const writeSlotsDataToFile = (data) => {
+    let outputFileName =
+        getFormattedDate() +
+        " " +
+        new Date().toLocaleTimeString().split(":").join("-") +
+        ".json";
+    if (data.length > 0) {
+        fs.writeFileSync(
+            `./slotsData/${outputFileName}`,
+            JSON.stringify(data, null, 4)
+        );
+    } else {
+        console.log(`${outputFileName} was not created as no slots were found`);
+    }
+};
+
+const URL = `https://cdn-api.co-vin.in/api/v2/appointment/sessions/public/calendarByDistrict?district_id=294&date=${getFormattedDate()}`;
+
 const startApp = () => {
     axios
-        .get(
-            "https://cdn-api.co-vin.in/api/v2/appointment/sessions/calendarByDistrict?district_id=294&date=26-05-2021",
-            {
-                headers: {
-                    "user-agent":
-                        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.87 Safari/537.36",
-                    // Authorization:
-                    //     "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX25hbWUiOiJkOGEwZTZhYy1iZTQ3LTRlY2YtODNlMS0zZDJmMTE3ZjU2MjMiLCJ1c2VyX2lkIjoiZDhhMGU2YWMtYmU0Ny00ZWNmLTgzZTEtM2QyZjExN2Y1NjIzIiwidXNlcl90eXBlIjoiQkVORUZJQ0lBUlkiLCJtb2JpbGVfbnVtYmVyIjo5NzQxNDE1MjQ2LCJiZW5lZmljaWFyeV9yZWZlcmVuY2VfaWQiOjYzMzAyMzYyNTI0MTEwLCJzZWNyZXRfa2V5IjoiYjVjYWIxNjctNzk3Ny00ZGYxLTgwMjctYTYzYWExNDRmMDRlIiwidWEiOiJNb3ppbGxhLzUuMCAoV2luZG93cyBOVCAxMC4wOyBXaW42NDsgeDY0KSBBcHBsZVdlYktpdC81MzcuMzYgKEtIVE1MLCBsaWtlIEdlY2tvKSBDaHJvbWUvOTAuMC40NDMwLjIxMiBTYWZhcmkvNTM3LjM2IiwiZGF0ZV9tb2RpZmllZCI6IjIwMjEtMDUtMjRUMDc6MjQ6NDUuNTg2WiIsImlhdCI6MTYyMTg0MTA4NSwiZXhwIjoxNjIxODQxOTg1fQ.a5yERm8jQB30pOm1f6yPhv1lTomEZYoXWB9UBjbVEgw",
-                },
-            }
-        )
+        .get(URL, {
+            headers: {
+                Accept: "application/json, text/plain, */*",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language": "en-US,en;q=0.9,kn;q=0.8",
+                dnt: 1,
+                Host: "cdn-api.co-vin.in",
+                Origin: "https://www.cowin.gov.in,",
+                Referer: "https://www.cowin.gov.in/",
+                "sec-ch-ua": `" Not A;Brand";v="99", "Chromium";v="90", "Google Chrome";v="90"`,
+                "Sec-Fetch-Site": "cross-site",
+                "Sec-Fetch-Mode": "cors",
+                "User-Agent":
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Safari/537.36",
+            },
+        })
         .then((response) => {
+            let slotsData = [];
+            let soundUrlArr = [];
             let data = response.data.centers;
             data.map((item) => {
                 let sessions = item.sessions;
@@ -67,15 +99,8 @@ const startApp = () => {
                                 } for ${session.vaccine.toLowerCase()}`
                             )
                         );
-                        let fileData = fs.readFileSync(
-                            `./slotsData/${outputFileName}`,
-                            {
-                                encoding: "utf-8",
-                            }
-                        );
 
-                        let existingData = JSON.parse(fileData);
-                        existingData.push({
+                        slotsData.push({
                             name: item.name,
                             address: item.address,
                             pincode: item.pincode,
@@ -86,46 +111,22 @@ const startApp = () => {
                                 session.available_capacity_dose2,
                             age_limit: session.min_age_limit,
                         });
-                        fs.writeFileSync(
-                            `./slotsData/${outputFileName}`,
-                            JSON.stringify(existingData, null, 4)
-                        );
                     }
                 });
             });
             if (soundUrlArr.length === 0) {
                 soundUrlArr.push(getSoundUrl("No slots available"));
             }
-            syncPlay();
+            writeSlotsDataToFile(slotsData);
+            let startTime = new Date();
+            syncPlay(soundUrlArr, 0, startTime);
         })
         .catch((err) => {
             console.log(err);
         });
 };
 
-// setInterval(() => {
-//     let soundUrlArr = [];
-// let i = 0;
-//     let outputFileName =
-//         new Date().toLocaleDateString().split("/").join("-") +
-//         " " +
-//         new Date().toLocaleTimeString().split(":").join("-") +
-//         ".json";
-
-//     fs.writeFileSync(`./slotsData/${outputFileName}`, JSON.stringify([]));
-
-//     startApp();
-// }, 60000);
-
-let soundUrlArr = [];
-let i = 0;
-
-let outputFileName =
-    new Date().toLocaleDateString().split("/").join("-") +
-    " " +
-    new Date().toLocaleTimeString().split(":").join("-") +
-    ".json";
-
-fs.writeFileSync(`./slotsData/${outputFileName}`, JSON.stringify([]));
-
+setInterval(() => {
+    startApp();
+}, API_HIT_INTERVAL);
 startApp();
